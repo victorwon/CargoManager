@@ -33,9 +33,6 @@
 NSString *const CMProductRequestDidReceiveResponseNotification = @"CMProductRequestDidReveiveResponseNotification";
 
 
-NSString *const CMTransactionFailedAlertTitle = @"In App Purchase failed";
-NSString *const CMTransactionFailedAlertMessage = @"The purchase failed due to an error. Please, try again later.";
-
 NSString *const CMCannotMakePaymentsAlertTitle = @"In App Purchases are disabled";
 NSString *const CMCannotMakePaymentsAlertMessage = @"You can enable them again in Settings.";
 
@@ -260,7 +257,7 @@ static CargoManager *_storeKitManager = nil;
 
     if (transaction.error.code != SKErrorPaymentCancelled) {
         // Display a transaction error here
-        UIAlertView *alert = [[UIAlertView alloc] initWithTitle:CMTransactionFailedAlertTitle
+        UIAlertView *alert = [[UIAlertView alloc] initWithTitle:transaction.error.localizedFailureReason
                                                         message:transaction.error.localizedDescription
                                                        delegate:nil
                                               cancelButtonTitle:CMAlertCancelButtonTitle
