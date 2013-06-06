@@ -261,7 +261,7 @@ static CargoManager *_storeKitManager = nil;
     if (transaction.error.code != SKErrorPaymentCancelled) {
         // Display a transaction error here
         UIAlertView *alert = [[UIAlertView alloc] initWithTitle:CMTransactionFailedAlertTitle
-                                                        message:CMTransactionFailedAlertMessage
+                                                        message:transaction.error.localizedDescription
                                                        delegate:nil
                                               cancelButtonTitle:CMAlertCancelButtonTitle
                                               otherButtonTitles:nil];
