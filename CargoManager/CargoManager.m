@@ -41,9 +41,7 @@ NSString *const CMAlertCancelButtonTitle = @"Ok";
 
 @interface CargoManager ()
 
-@property (nonatomic) BOOL productRequestSent;
-@property (nonatomic) BOOL productRequestDidReceiveResponse;
-@property (nonatomic) BOOL productRequestError;
+@property (nonatomic) BOOL isStoreLoaded;
 @property (nonatomic) NSArray *cachedProducts;
 
 @end
@@ -75,9 +73,49 @@ static CargoManager *_storeKitManager = nil;
         return nil;
     }
 
-    self.productRequestSent = NO;
-    self.productRequestDidReceiveResponse = NO;
-    self.productRequestError = NO;
+    self.isStoreLoaded = NO;
+    
+    // Set CargoBay as App Store transaction observer
+    [[SKPaymentQueue defaultQueue] addTransactionObserver:[CargoBay sharedManager]];
+    
+    __weak CargoManager *weakSelf = self;
+    [[CargoBay sharedManager] setPaymentQueueUpdatedTransactionsBlock:
+     ^(SKPaymentQueue *queue, NSArray *transactions)
+     {
+         for (SKPaymentTransaction *transaction in transactions)
+         {
+             [weakSelf transactionUpdated:transaction];
+         }
+         
+     }];
+    
+    [[CargoBay sharedManager] setPaymentQueueRemovedTransactionsBlock:
+     ^(SKPaymentQueue *queue, NSArray *transactions)
+     {
+         for (SKPaymentTransaction *transaction in transactions)
+         {
+             [weakSelf transactionRemoved:transaction];
+         }
+     }];
+    
+    [[CargoBay sharedManager] setPaymentQueueRestoreCompletedTransactionsWithSuccess:
+     ^(SKPaymentQueue *queue)
+     {
+         [self restoredCompletedTransactionsWithError:nil];
+     } failure:
+     ^(SKPaymentQueue *queue, NSError *error)
+     {
+         [weakSelf restoredCompletedTransactionsWithError:error];
+     }];
+    
+    [[CargoBay sharedManager] setPaymentQueueUpdatedDownloadsBlock:
+     ^(SKPaymentQueue *queue, NSArray *downloads)
+     {
+         for (SKDownload *download in downloads)
+         {
+             [weakSelf downloadUpdated:download];
+         }
+     }];
 
     return self;
 }
@@ -87,80 +125,20 @@ static CargoManager *_storeKitManager = nil;
     [[SKPaymentQueue defaultQueue] removeTransactionObserver:[CargoBay sharedManager]];
 }
 
-// Call this method once in your AppDelegate's -(void)application:didFinishLaunchingWithOptions: method
 - (void)loadStore
-{
-    // Set CargoBay as App Store transaction observer
-    [[SKPaymentQueue defaultQueue] addTransactionObserver:[CargoBay sharedManager]];
-    
-    __weak CargoManager *weakSelf = self;
-    [[CargoBay sharedManager] setPaymentQueueUpdatedTransactionsBlock:
-    ^(SKPaymentQueue *queue, NSArray *transactions)
-    {
-        for (SKPaymentTransaction *transaction in transactions)
-        {
-            [weakSelf transactionUpdated:transaction];
-        }
-        
-    }];
-    
-    [[CargoBay sharedManager] setPaymentQueueRemovedTransactionsBlock:
-     ^(SKPaymentQueue *queue, NSArray *transactions)
-    {
-        for (SKPaymentTransaction *transaction in transactions)
-        {
-            [weakSelf transactionRemoved:transaction];
-        }
-    }];
-    
-    [[CargoBay sharedManager] setPaymentQueueRestoreCompletedTransactionsWithSuccess:
-     ^(SKPaymentQueue *queue)
-    {
-        [self restoredCompletedTransactionsWithError:nil];
-    } failure:
-     ^(SKPaymentQueue *queue, NSError *error)
-    {
-        [weakSelf restoredCompletedTransactionsWithError:error];
-    }];
-    
-    [[CargoBay sharedManager] setPaymentQueueUpdatedDownloadsBlock:
-     ^(SKPaymentQueue *queue, NSArray *downloads)
-    {
-        for (SKDownload *download in downloads)
-        {
-            [weakSelf downloadUpdated:download];
-        }        
-    }];
-
-    [self loadProducts];
-}
-
-- (void)retryLoadingProducts
-{
-    if (!self.productRequestSent && self.productRequestDidReceiveResponse && self.productRequestError)
-    {
-        [self loadProducts];
-    }
-}
-
-- (void)loadProducts
 {
     NSArray *identifiers = [self.contentDelegate productIdentifiers];
 
     __weak CargoManager *weakSelf = self;
 
 
-    self.productRequestSent = YES;
     [[CargoBay sharedManager] productsWithIdentifiers:[NSSet setWithArray:identifiers]
                                               success:
      ^(NSArray *products, NSArray *invalidIdentifiers)
      {
          // Store cached products and send notification
          weakSelf.cachedProducts = products;
-
-         weakSelf.productRequestSent = NO;
-         weakSelf.productRequestDidReceiveResponse = YES;
-         weakSelf.productRequestError = NO;
+         weakSelf.isStoreLoaded = YES;
 
          [weakSelf _postProductRequestDidReceiveResponseNotificationWithError:nil];
 
@@ -171,9 +149,7 @@ static CargoManager *_storeKitManager = nil;
      ^(NSError *error)
      {
          // Note error and send notification
-         weakSelf.productRequestSent = NO;
-         weakSelf.productRequestDidReceiveResponse = YES;
-         weakSelf.productRequestError = YES;
+         weakSelf.isStoreLoaded = NO;
 
          [weakSelf _postProductRequestDidReceiveResponseNotificationWithError:error];
 

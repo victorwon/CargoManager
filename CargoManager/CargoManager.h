@@ -38,8 +38,7 @@ extern NSString *const CMProductRequestDidReceiveResponseNotification;
 
 @interface CargoManager : NSObject
 
-@property (nonatomic, readonly) BOOL productRequestDidReceiveResponse;
-@property (nonatomic, readonly) BOOL productRequestError;
+@property (nonatomic, readonly) BOOL isStoreLoaded;
 
 @property (nonatomic, weak) id <CargoManagerContentDelegate>  contentDelegate;
 @property (nonatomic, weak) id <CargoManagerUIDelegate>  UIDelegate;
@@ -47,7 +46,6 @@ extern NSString *const CMProductRequestDidReceiveResponseNotification;
 + (CargoManager *)sharedManager;
 
 - (void)loadStore;
-- (void)retryLoadingProducts;
 
 - (SKProduct *)productForIdentifier:(NSString *)identifier;
 
