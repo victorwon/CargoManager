@@ -1,6 +1,6 @@
 This is a fork of [Ricardo Sánchez-Sáez's CargoManager](https://github.com/rsanchezsaez/CargoManager), with following difference that Ricardo rejected to merge into upstream:
 
-* Use system localized error description / reason: rsanchezsaez/CargoManager#2.
+* Use system localized error description / reason: [#2](https://github.com/rsanchezsaez/CargoManager/pull/2)
 
 Even more, this fork has other differences:
 
