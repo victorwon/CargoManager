@@ -2,6 +2,7 @@
 //  CargoManager.h
 //
 //  Copyright (c) 2013 Ricardo Sánchez-Sáez (http://sanchez-saez.com/)
+//  Copyright (c) 2014 Yang Yubo (http://codinn.com/)
 //  All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without
@@ -58,32 +59,37 @@ extern NSString *const CMProductRequestDidReceiveResponseNotification;
 @protocol CargoManagerContentDelegate <NSObject>
 
 // This method should return an array with all the productIdentifiers used by your App
-- (NSArray *)productIdentifiers;
+- (NSArray *)cargoManagerProductIdentifiers:(CargoManager *)cargoManager;
+
 // Implement this method to provide content
-- (void)provideContentForProductIdentifier:(NSString *)productIdentifier;
+- (void)cargoManager:(CargoManager *)cargoManager provideContentForProductIdentifier:(NSString *)productIdentifier;
 
 @optional
 
 // Use this method if you want to store the transaction for your records
-- (void)recordTransaction:(SKPaymentTransaction *)transaction;
+- (void)cargoManager:(CargoManager *)cargoManager recordTransaction:(SKPaymentTransaction *)transaction;
 
 // Use this method to manage download data
-- (void)downloadUpdated:(SKDownload *)download;
+- (void)cargoManager:(CargoManager *)cargoManager downloadUpdated:(SKDownload *)download;
 
 @end
 
 
 @protocol CargoManagerUIDelegate <NSObject>
 
+#if TARGET_OS_MAC
+- (NSWindow *)cargoManagerParentWindow:(CargoManager *)cargoManager;
+#endif
+
 // Implement this method to update UI after a IAP has finished
 // This method is called both for successful and failed transactions
-- (void)transactionDidFinishWithSuccess:(BOOL)success;
+- (void)cargoManager:(CargoManager *)cargoManager transactionDidFinishWithSuccess:(BOOL)success;
 
 @optional
 
 // Implement this method to update UI after a IAP restore has finished
 // This method is called both for successful and failed restores
-- (void)restoredTransactionsDidFinishWithSuccess:(BOOL)success;
+- (void)cargoManager:(CargoManager *)cargoManager restoredTransactionsDidFinishWithSuccess:(BOOL)success;
 
 @end
 

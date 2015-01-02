@@ -2,6 +2,7 @@
 //  CargoManager.m
 //
 //  Copyright (c) 2013 Ricardo Sánchez-Sáez (http://sanchez-saez.com/)
+//  Copyright (c) 2014 Yang Yubo (http://codinn.com/)
 //  All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without
@@ -26,7 +27,6 @@
 //
 
 #import "CargoManager.h"
-
 #import "CargoBay.h"
 
 
@@ -36,10 +36,16 @@ NSString *const CMProductRequestDidReceiveResponseNotification = @"CMProductRequ
 NSString *const CMCannotMakePaymentsAlertTitle = @"In App Purchases are disabled";
 NSString *const CMCannotMakePaymentsAlertMessage = @"You can enable them again in Settings.";
 
-NSString *const CMAlertCancelButtonTitle = @"Ok";
+NSString *const CMAlertCancelButtonTitle = @"OK";
 
 
-@interface CargoManager ()
+@interface CargoManager () {
+    struct {
+      unsigned int recordTransaction    : 1;
+      unsigned int downloadUpdated      : 1;
+      unsigned int restoredTransactionsDidFinishWithSuccess : 1;
+    } _delegateFlags;
+}
 
 @property (nonatomic) BOOL isStoreLoaded;
 @property (nonatomic) NSArray *cachedProducts;
@@ -53,69 +59,54 @@ static CargoManager *_storeKitManager = nil;
 + (CargoManager *)sharedManager
 {
     static dispatch_once_t onceToken;
-    dispatch_once(&onceToken,
-    ^
-    {
+    dispatch_once(&onceToken, ^ {
         _storeKitManager = [[CargoManager alloc] init];
     });
+    
     return _storeKitManager;
 }
 
 - (id)init
 {
-    if (_storeKitManager)
-    {
+    if (_storeKitManager) {
         return _storeKitManager;
     }
 
-    if ( !(self = [super init]) )
-    {
+    if ( !(self = [super init]) ) {
         return nil;
     }
 
     self.isStoreLoaded = NO;
     
-    // Set CargoBay as App Store transaction observer
-    [[SKPaymentQueue defaultQueue] addTransactionObserver:[CargoBay sharedManager]];
+    CargoBay *cargoBay = [CargoBay sharedManager];
     
     __weak CargoManager *weakSelf = self;
-    [[CargoBay sharedManager] setPaymentQueueUpdatedTransactionsBlock:
-     ^(SKPaymentQueue *queue, NSArray *transactions)
-     {
-         for (SKPaymentTransaction *transaction in transactions)
-         {
-             [weakSelf transactionUpdated:transaction];
-         }
-         
-     }];
+    cargoBay.paymentQueueUpdatedTransactionsBlock = ^(SKPaymentQueue *queue, NSArray *transactions) {
+        for (SKPaymentTransaction *transaction in transactions) {
+            [weakSelf transactionUpdated:transaction];
+        }
+    };
     
-    [[CargoBay sharedManager] setPaymentQueueRemovedTransactionsBlock:
-     ^(SKPaymentQueue *queue, NSArray *transactions)
-     {
-         for (SKPaymentTransaction *transaction in transactions)
-         {
-             [weakSelf transactionRemoved:transaction];
-         }
-     }];
+    cargoBay.paymentQueueRemovedTransactionsBlock = ^(SKPaymentQueue *queue, NSArray *transactions) {
+        for (SKPaymentTransaction *transaction in transactions) {
+            [weakSelf transactionRemoved:transaction];
+        }
+     };
     
-    [[CargoBay sharedManager] setPaymentQueueRestoreCompletedTransactionsWithSuccess:
-     ^(SKPaymentQueue *queue)
-     {
-         [self restoredCompletedTransactionsWithError:nil];
-     } failure:
-     ^(SKPaymentQueue *queue, NSError *error)
-     {
-         [weakSelf restoredCompletedTransactionsWithError:error];
-     }];
+    [cargoBay setPaymentQueueRestoreCompletedTransactionsWithSuccess : ^(SKPaymentQueue *queue) {
+        [self restoredCompletedTransactionsWithError:nil];
+    } failure: ^(SKPaymentQueue *queue, NSError *error) {
+        [weakSelf restoredCompletedTransactionsWithError:error];
+    }];
     
-    [[CargoBay sharedManager] setPaymentQueueUpdatedDownloadsBlock:
-     ^(SKPaymentQueue *queue, NSArray *downloads)
-     {
-         for (SKDownload *download in downloads)
-         {
-             [weakSelf downloadUpdated:download];
-         }
-     }];
+    cargoBay.paymentQueueUpdatedDownloadsBlock = ^(SKPaymentQueue *queue, NSArray *downloads) {
+        for (SKDownload *download in downloads) {
+            [weakSelf downloadUpdated:download];
+        }
+    };
+    
+    // Set CargoBay as App Store transaction observer
+    [[SKPaymentQueue defaultQueue] addTransactionObserver:cargoBay];
 
     return self;
 }
@@ -127,34 +118,25 @@ static CargoManager *_storeKitManager = nil;
 
 - (void)loadStore
 {
-    NSArray *identifiers = [self.contentDelegate productIdentifiers];
+    NSArray *identifiers = [self.contentDelegate cargoManagerProductIdentifiers:self];
+    
+    CargoBay *cargoBay = [CargoBay sharedManager];
 
     __weak CargoManager *weakSelf = self;
 
-
-    [[CargoBay sharedManager] productsWithIdentifiers:[NSSet setWithArray:identifiers]
-                                              success:
-     ^(NSArray *products, NSArray *invalidIdentifiers)
-     {
-         // Store cached products and send notification
-         weakSelf.cachedProducts = products;
-         weakSelf.isStoreLoaded = YES;
-
-         [weakSelf _postProductRequestDidReceiveResponseNotificationWithError:nil];
-
-         // DLog(@"Products: %@", products);
-         // DLog(@"Invalid Identifiers: %@", invalidIdentifiers);
-     }
-                                              failure:
-     ^(NSError *error)
-     {
-         // Note error and send notification
-         weakSelf.isStoreLoaded = NO;
-
-         [weakSelf _postProductRequestDidReceiveResponseNotificationWithError:error];
-
-         // DLog(@"Error: %@", error);
-     }];
+    [cargoBay productsWithIdentifiers:[NSSet setWithArray:identifiers]
+                              success: ^(NSArray *products, NSArray *invalidIdentifiers) {
+                                  // Store cached products and send notification
+                                  weakSelf.cachedProducts = products;
+                                  weakSelf.isStoreLoaded = YES;
+                                  
+                                  [weakSelf _postProductRequestDidReceiveResponseNotificationWithError:nil];
+                              } failure: ^(NSError *error) {
+                                  // Note error and send notification
+                                  weakSelf.isStoreLoaded = NO;
+                                  
+                                  [weakSelf _postProductRequestDidReceiveResponseNotificationWithError:error];
+                              }];
 }
 
 // Posts the products received notification.
@@ -162,10 +144,10 @@ static CargoManager *_storeKitManager = nil;
 - (void)_postProductRequestDidReceiveResponseNotificationWithError:(NSError *)error
 {
     NSDictionary *notificationInfo = nil;
-    if (error)
-    {
+    if (error) {
         notificationInfo = @{ @"error" : error };
     }
+    
     NSNotification *notification = [NSNotification notificationWithName:CMProductRequestDidReceiveResponseNotification
                                                                  object:self
                                                                userInfo:notificationInfo];
@@ -175,10 +157,8 @@ static CargoManager *_storeKitManager = nil;
 - (void)transactionUpdated:(SKPaymentTransaction *)transaction
 {
     // DLog(@"{ transaction.transactionState: %d }", transaction.transactionState);
-    switch (transaction.transactionState)
-    {
-        case SKPaymentTransactionStatePurchased:
-        {
+    switch (transaction.transactionState) {
+        case SKPaymentTransactionStatePurchased: {
             __weak CargoManager *weakSelf = self;
             [[CargoBay sharedManager] verifyTransaction:transaction
                                                password:nil
@@ -195,11 +175,14 @@ static CargoManager *_storeKitManager = nil;
                 [weakSelf transactionFailed:transaction];
             }];
         } break;
+            
         case SKPaymentTransactionStateFailed:
             [self transactionFailed:transaction];
             break;
+            
         case SKPaymentTransactionStateRestored:
             [self restoreTransaction:transaction];
+            
         default:
             break;
     }    
@@ -207,10 +190,8 @@ static CargoManager *_storeKitManager = nil;
 
 - (void)completeTransaction:(SKPaymentTransaction *)transaction
 {
-    // DLog(@"");
-
     [self recordTransaction:transaction];
-    [self.contentDelegate provideContentForProductIdentifier:transaction.payment.productIdentifier];
+    [self.contentDelegate cargoManager:self provideContentForProductIdentifier:transaction.payment.productIdentifier];
     
     // Remove the transaction from the payment queue
     [[SKPaymentQueue defaultQueue] finishTransaction:transaction];
@@ -218,10 +199,8 @@ static CargoManager *_storeKitManager = nil;
 
 - (void)restoreTransaction:(SKPaymentTransaction *)transaction
 {
-    // DLog(@"");
-
     [self recordTransaction:transaction];
-    [self.contentDelegate provideContentForProductIdentifier:transaction.originalTransaction.payment.productIdentifier];
+    [self.contentDelegate cargoManager:self provideContentForProductIdentifier:transaction.originalTransaction.payment.productIdentifier];
     
     // Remove the transaction from the payment queue
     [[SKPaymentQueue defaultQueue] finishTransaction:transaction];
@@ -229,16 +208,23 @@ static CargoManager *_storeKitManager = nil;
 
 - (void)transactionFailed:(SKPaymentTransaction *)transaction
 {
-    // DLog(@"{ transaction.error: %@ }", transaction.error);
-
     if (transaction.error.code != SKErrorPaymentCancelled) {
+        
         // Display a transaction error here
+#if TARGET_OS_IPHONE
         UIAlertView *alert = [[UIAlertView alloc] initWithTitle:transaction.error.localizedFailureReason
                                                         message:transaction.error.localizedDescription
                                                        delegate:nil
                                               cancelButtonTitle:CMAlertCancelButtonTitle
                                               otherButtonTitles:nil];
         [alert show];
+#else
+        NSWindow *window = [self.UIDelegate cargoManagerParentWindow:self];
+        NSAlert *alert = [NSAlert alertWithError:transaction.error];
+        [alert beginSheetModalForWindow:window completionHandler:^(NSModalResponse returnCode) {
+            return;
+        }];
+#endif
     }
     
     // Remove the transaction from the payment queue
@@ -247,94 +233,107 @@ static CargoManager *_storeKitManager = nil;
 
 - (void)transactionRemoved:(SKPaymentTransaction *)transaction
 {
-    // DLog(@"{ transaction.transactionState: %d transaction.error: %@ }",
-    //     transaction.transactionState,
-    //     transaction.error);
-
-    switch (transaction.transactionState)
-    {
+    switch (transaction.transactionState) {
         case SKPaymentTransactionStatePurchased:
         case SKPaymentTransactionStateRestored:
-            // DBLog(@" Successfull transaction removed.");
-
-            [self.UIDelegate transactionDidFinishWithSuccess:YES];
+            [self.UIDelegate cargoManager:self transactionDidFinishWithSuccess:YES];
             break;
+            
         case SKPaymentTransactionStateFailed:
         default:
-            // DBLog(@" Failed transaction removed.");
-
-            [self.UIDelegate transactionDidFinishWithSuccess:NO];
+            [self.UIDelegate cargoManager:self transactionDidFinishWithSuccess:NO];
             break;
     }
 }
 
 - (void)recordTransaction:(SKPaymentTransaction *)transaction
 {
-    if ( [self.contentDelegate respondsToSelector:@selector(recordTransaction:)] )
-    {
-        [self.contentDelegate recordTransaction:transaction];
+    if ( _delegateFlags.recordTransaction ) {
+        [self.contentDelegate cargoManager:self recordTransaction:transaction];
     }
 }
 
 - (void)restoredCompletedTransactionsWithError:(NSError *)error
 {
-    if ( [self.UIDelegate respondsToSelector:@selector(restoredTransactionsDidFinishWithSuccess:)] )
-    {
-        [self.UIDelegate restoredTransactionsDidFinishWithSuccess:( error == nil )];
+    if ( _delegateFlags.restoredTransactionsDidFinishWithSuccess ) {
+        [self.UIDelegate cargoManager:self restoredTransactionsDidFinishWithSuccess:( error == nil )];
     }
 }
 
 - (void)downloadUpdated:(SKDownload *)download
 {
-    if ( [self.contentDelegate respondsToSelector:@selector(downloadUpdated:)] )
-    {
-        [self.contentDelegate downloadUpdated:download];
+    if ( _delegateFlags.downloadUpdated ) {
+        [self.contentDelegate cargoManager:self downloadUpdated:download];
     }
 }
 
 - (SKProduct *)productForIdentifier:(NSString *)identifier
 {
-    for (SKProduct *product in self.cachedProducts)
-    {
-        if ( [product.productIdentifier isEqualToString:identifier] )
-        {
+    for (SKProduct *product in self.cachedProducts) {
+        if ( [product.productIdentifier isEqualToString:identifier] ) {
             return product;
         }
     }
+    
     return nil;
 }
 
 - (void)buyProduct:(SKProduct *)product
 {
-    if ([SKPaymentQueue canMakePayments])
-    {
-        // DLog(@"Queuing payment.")
+    if ([SKPaymentQueue canMakePayments]) {
         // Queue payment
         SKPayment *payment = [SKPayment paymentWithProduct:product];
         [[SKPaymentQueue defaultQueue] addPayment:payment];
-    }
-    else
-    {
+    } else {
         [self showCannotMakePaymentsAlert];
     }
 }
 
 - (void)showCannotMakePaymentsAlert
 {
-    // DLog(@"IAP are disabled.")
     // Warn the user that purchases are disabled.
     // Display a transaction error here
+#if TARGET_OS_IPHONE
     UIAlertView *alert = [[UIAlertView alloc] initWithTitle:CMCannotMakePaymentsAlertTitle
                                                     message:CMCannotMakePaymentsAlertMessage
                                                    delegate:nil
                                           cancelButtonTitle:CMAlertCancelButtonTitle
                                           otherButtonTitles:nil];
     [alert show];
+#else
+    NSWindow *window = [self.UIDelegate cargoManagerParentWindow:self];
+    NSAlert *alert = [[NSAlert alloc] init];
+    alert.informativeText = CMCannotMakePaymentsAlertTitle;
+    alert.messageText = CMCannotMakePaymentsAlertMessage;
+    [alert addButtonWithTitle:CMAlertCancelButtonTitle];
+    
+    [alert beginSheetModalForWindow:window completionHandler:^(NSModalResponse returnCode) {
+        return;
+    }];
+#endif
 }
 
 - (void)restorePurchasedProducts
 {
     [[SKPaymentQueue defaultQueue] restoreCompletedTransactions];
+}
+
+#pragma mark - Accessors
+- (void)setContentDelegate:(id<CargoManagerContentDelegate>)contentDelegate
+{
+    if (_contentDelegate != contentDelegate) {
+        _contentDelegate = contentDelegate;
+        _delegateFlags.recordTransaction = [contentDelegate respondsToSelector:@selector(cargoManager:recordTransaction:)];
+        _delegateFlags.downloadUpdated = [contentDelegate respondsToSelector:@selector(cargoManager:downloadUpdated:)];
+    }
+}
+
+- (void)setUIDelegate:(id<CargoManagerUIDelegate>)UIDelegate
+{
+    if (_UIDelegate != UIDelegate) {
+        _UIDelegate = UIDelegate;
+        _delegateFlags.recordTransaction = [UIDelegate respondsToSelector:@selector(cargoManager:restoredTransactionsDidFinishWithSuccess:)];
+    }
 }
 
 @end
