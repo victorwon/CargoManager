@@ -10,5 +10,6 @@ Pod::Spec.new do |s|
   s.platform = :ios, '7.0'
   s.frameworks = 'StoreKit'
   s.requires_arc = true
+  s.dependency 'CargoBay', '~> 2.1'
 
 end
