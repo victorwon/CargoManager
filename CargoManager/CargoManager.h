@@ -78,8 +78,9 @@ extern NSString *const CMProductRequestDidReceiveResponseNotification;
 @protocol CargoManagerUIDelegate <NSObject>
 
 #if TARGET_OS_MAC
-- (NSWindow *)cargoManagerParentWindow:(CargoManager *)cargoManager;
+//- (NSWindow *)cargoManagerParentWindow:(CargoManager *)cargoManager;
 #endif
+
 
 // Implement this method to update UI after a IAP has finished
 // This method is called both for successful and failed transactions
