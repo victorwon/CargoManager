@@ -1,5 +1,5 @@
 Pod::Spec.new do |s|
-  s.name = 'RMStore'
+  s.name = 'CargoManager'
   s.version = '0.5.0'
   s.license = 'FreeBSD'
   s.summary = 'CargoManager is an open source library that helps you implement IAPs for iOS apps in a simple and encapsulated way by using the by using the delegate pattern.'
