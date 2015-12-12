@@ -6,6 +6,7 @@ Pod::Spec.new do |s|
   s.homepage = 'https://github.com/victorwon/CargoManager'
   s.author = 'Yang & Ricardo'
   s.source = { :git => 'https://github.com/victorwon/CargoManager.git', :tag => "v#{s.version}" }
+  s.source_files = 'CargoManager/CargoManager.{h,m}'
   s.platform = :ios, '7.0'
   s.frameworks = 'StoreKit'
   s.requires_arc = true
