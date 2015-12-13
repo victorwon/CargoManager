@@ -180,8 +180,21 @@ static CargoManager *_storeKitManager = nil;
             [self transactionFailed:transaction];
             break;
             
-        case SKPaymentTransactionStateRestored:
-            [self restoreTransaction:transaction];
+        case SKPaymentTransactionStateRestored: {
+            __weak CargoManager *weakSelf = self;
+            [[CargoBay sharedManager] verifyTransaction:transaction
+                                               password:nil
+                                                success:
+             ^(NSDictionary *receipt)
+             {
+                 [weakSelf restoreTransaction:transaction];
+             }
+                                                failure:
+             ^(NSError *error)
+             {
+                 [weakSelf transactionFailed:transaction];
+             }];
+        } break;
             
         default:
             break;
